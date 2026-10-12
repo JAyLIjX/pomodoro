@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>番茄专注</title>
+<style>
+  :root {
+    --bg: #faf6f1;
+    --card: #ffffff;
+    --text: #2b2420;
+    --muted: #8a7f78;
+    --line: #ece4dc;
+    --accent: #e4572e;
+    --accent-soft: #fbe3da;
+    --ring-track: #f1e8e0;
+    --shadow: 0 10px 30px rgba(80, 40, 20, .08);
+  }
+  body[data-mode="short"] { --accent: #2a9d8f; --accent-soft: #d8efec; }
+  body[data-mode="long"]  { --accent: #457b9d; --accent-soft: #dce8f0; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1715; --card: #26201d; --text: #f3ece6; --muted: #a39890;
+      --line: #3a322d; --ring-track: #3a322d; --accent-soft: #4a2a20;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    }
+    body[data-mode="short"] { --accent-soft: #1f3f3b; }
+    body[data-mode="long"]  { --accent-soft: #233745; }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px 16px;
+    transition: background .4s;
+  }
+  .app {
+    width: 100%; max-width: 880px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  }
+  @media (max-width: 720px) { .app { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border-radius: 20px; padding: 24px;
+    box-shadow: var(--shadow);
+  }
+
+  /* ---------- Timer ---------- */
+  .modes { display: flex; gap: 6px; background: var(--accent-soft); padding: 4px; border-radius: 12px; transition: background .4s; }
+  .modes button {
+    flex: 1; border: 0; background: transparent; color: var(--text);
+    padding: 8px 4px; border-radius: 9px; font-size: 14px; cursor: pointer;
+  }
+  .modes button.active { background: var(--card); color: var(--accent); font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+
+  .ring-wrap { position: relative; width: min(260px, 70vw); aspect-ratio: 1; margin: 28px auto 20px; }
+  .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-wrap circle { fill: none; stroke-width: 10; }
+  .track { stroke: var(--ring-track); }
+  .progress { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .3s linear, stroke .4s; }
+  .time {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .time .digits { font-size: clamp(44px, 12vw, 60px); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+  .time .label { color: var(--muted); font-size: 13px; margin-top: 4px; max-width: 80%; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .controls { display: flex; gap: 10px; justify-content: center; }
+  .btn {
+    border: 0; border-radius: 12px; padding: 12px 20px; font-size: 15px; cursor: pointer;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+    transition: transform .1s, background .4s;
+  }
+  .btn:active { transform: scale(.96); }
+  .btn.primary { background: var(--accent); color: #fff; min-width: 110px; }
+
+  .stats { display: flex; justify-content: center; gap: 6px; margin-top: 20px; flex-wrap: wrap; min-height: 20px; }
+  .stats .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); opacity: .85; }
+  .stats-text { text-align: center; color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 14px; }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-family: inherit; }
+
+  /* ---------- Tasks ---------- */
+  h2 { margin: 0 0 4px; font-size: 18px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  form { display: flex; gap: 8px; margin-bottom: 14px; }
+  form input {
+    flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    border-radius: 10px; padding: 10px 12px; font-size: 15px; outline: none;
+  }
+  form input:focus { border-color: var(--accent); }
+  ul { list-style: none; margin: 0; padding: 0; max-height: 380px; overflow-y: auto; }
+  li {
+    display: flex; align-items: center; gap: 10px; padding: 10px;
+    border-radius: 10px; border: 1px solid transparent; cursor: pointer;
+  }
+  li:hover { background: var(--bg); }
+  li.selected { border-color: var(--accent); background: var(--accent-soft); }
+  li input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; flex: none; }
+  li .name { flex: 1; word-break: break-word; }
+  li.done .name { text-decoration: line-through; color: var(--muted); }
+  li .count { color: var(--accent); font-size: 13px; white-space: nowrap; }
+  li .del { border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 4px; opacity: 0; }
+  li:hover .del, li.selected .del { opacity: 1; }
+  @media (hover: none) { li .del { opacity: 1; } }
+  .empty { color: var(--muted); text-align: center; padding: 30px 0; font-size: 14px; }
+  .footer { display: flex; justify-content: space-between; margin-top: 12px; color: var(--muted); font-size: 13px; }
+  .footer button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; text-decoration: underline; }
+</style>
+</head>
+<body data-mode="focus">
+<main class="app">
+  <!-- 计时器 -->
+  <section class="card">
+    <div class="modes" role="tablist">
+      <button data-mode="focus" class="active">专注</button>
+      <button data-mode="short">短休息</button>
+      <button data-mode="long">长休息</button>
+    </div>
+
+    <div class="ring-wrap">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="track" cx="60" cy="60" r="52"/>
+        <circle class="progress" id="progress" cx="60" cy="60" r="52"/>
+      </svg>
+      <div class="time">
+        <div class="digits" id="digits">25:00</div>
+        <div class="label" id="label">点一个任务开始专注</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="resetBtn" title="重置">↺ 重置</button>
+      <button class="btn primary" id="startBtn">开始</button>
+      <button class="btn" id="skipBtn" title="跳过">跳过 ⏭</button>
+    </div>
+
+    <div class="stats" id="dots"></div>
+    <div class="stats-text" id="statsText">今天还没有完成番茄</div>
+    <div class="hint"><kbd>空格</kbd> 开始/暂停 · <kbd>R</kbd> 重置 · <kbd>N</kbd> 新任务</div>
+  </section>
+
+  <!-- 任务 -->
+  <section class="card">
+    <h2>今日任务</h2>
+    <p class="sub">点击任务即可设为当前专注目标,完成的番茄会记在它名下。</p>
+    <form id="taskForm">
+      <input id="taskInput" placeholder="添加一个任务,回车确认" maxlength="80" autocomplete="off">
+      <button class="btn primary" type="submit" style="min-width:auto">添加</button>
+    </form>
+    <ul id="taskList"></ul>
+    <div class="footer">
+      <span id="taskSummary"></span>
+      <button id="clearDone">清除已完成</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const DURATIONS = { focus: 25 * 60, short: 5 * 60, long: 15 * 60 };
+  const MODE_NAMES = { focus: '专注', short: '短休息', long: '长休息' };
+  const LONG_BREAK_EVERY = 4;
+  const STORE_KEY = 'pomodoro-app-v1';
+
+  // ---------- 存储(失败时静默降级为内存) ----------
+  const today = () => new Date().toISOString().slice(0, 10);
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+      if (data.day !== today()) data.completedToday = 0;  // 新的一天,计数归零
+      return { tasks: data.tasks || [], selectedId: data.selectedId || null, completedToday: data.completedToday || 0 };
+    } catch { return { tasks: [], selectedId: null, completedToday: 0 }; }
+  }
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        tasks: state.tasks, selectedId: state.selectedId, completedToday: state.completedToday, day: today(),
+      }));
+    } catch {}
+  }
+
+  const state = { ...load(), mode: 'focus', remaining: DURATIONS.focus, endAt: null, tick: null };
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const digits = $('digits'), label = $('label'), progress = $('progress');
+  const startBtn = $('startBtn');
+  const CIRC = 2 * Math.PI * 52;
+  progress.style.strokeDasharray = CIRC;
+
+  const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const selectedTask = () => state.tasks.find(t => t.id === state.selectedId);
+
+  // ---------- 计时器 ----------
+  function renderTimer() {
+    const secs = Math.ceil(state.remaining);
+    digits.textContent = fmt(secs);
+    progress.style.strokeDashoffset = CIRC * (1 - state.remaining / DURATIONS[state.mode]);
+    startBtn.textContent = state.endAt ? '暂停' : (state.remaining < DURATIONS[state.mode] ? '继续' : '开始');
+    const task = selectedTask();
+    label.textContent = state.mode === 'focus'
+      ? (task ? `正在专注:${task.name}` : '点一个任务开始专注')
+      : '休息一下,喝口水 ☕';
+    document.title = state.endAt ? `${fmt(secs)} · ${MODE_NAMES[state.mode]}` : '番茄专注';
+  }
+
+  function setMode(mode) {
+    stop();
+    state.mode = mode;
+    state.remaining = DURATIONS[mode];
+    document.body.dataset.mode = mode;
+    document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    renderTimer();
+  }
+
+  function start() {
+    // 用结束时间戳计算剩余时间,标签页在后台被降频也不会走慢
+    state.endAt = Date.now() + state.remaining * 1000;
+    state.tick = setInterval(() => {
+      state.remaining = Math.max(0, (state.endAt - Date.now()) / 1000);
+      if (state.remaining <= 0) finish(); else renderTimer();
+    }, 250);
+    unlockAudio();
+    renderTimer();
+  }
+
+  function stop() {
+    clearInterval(state.tick);
+    state.tick = null;
+    state.endAt = null;
+  }
+
+  function toggle() { state.endAt ? (stop(), renderTimer()) : start(); }
+
+  function finish(skipped = false) {
+    stop();
+    if (state.mode === 'focus' && !skipped) {
+      state.completedToday++;
+      const task = selectedTask();
+      if (task) task.pomodoros = (task.pomodoros || 0) + 1;
+      save();
+      renderTasks();
+      renderStats();
+    }
+    if (!skipped) {
+      chime();
+      notify(state.mode === 'focus' ? '专注完成!休息一下吧 🍅' : '休息结束,继续加油 💪');
+    }
+    const next = state.mode !== 'focus' ? 'focus'
+      : (state.completedToday > 0 && state.completedToday % LONG_BREAK_EVERY === 0 ? 'long' : 'short');
+    setMode(next);
+  }
+
+  // ---------- 声音与通知 ----------
+  let audioCtx;
+  function unlockAudio() {
+    try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch {}
+    if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  }
+  function chime() {
+    if (!audioCtx) return;
+    [660, 880, 1046].forEach((freq, i) => {
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      const t = audioCtx.currentTime + i * 0.18;
+      osc.frequency.value = freq; osc.type = 'sine';
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t); osc.stop(t + 0.55);
+    });
+  }
+  function notify(text) {
+    try { if (Notification.permission === 'granted' && document.hidden) new Notification('番茄专注', { body: text }); } catch {}
+  }
+
+  function renderStats() {
+    const n = state.completedToday;
+    $('dots').innerHTML = '<span class="dot"></span>'.repeat(Math.min(n, 24));
+    $('statsText').textContent = n ? `今天完成 ${n} 个番茄 · 约 ${n * 25} 分钟专注` : '今天还没有完成番茄';
+  }
+
+  // ---------- 任务 ----------
+  const list = $('taskList');
+  function renderTasks() {
+    list.innerHTML = '';
+    if (!state.tasks.length) {
+      list.innerHTML = '<div class="empty">还没有任务,先写下一件今天想做的事吧</div>';
+    }
+    for (const t of state.tasks) {
+      const li = document.createElement('li');
+      li.className = (t.done ? 'done ' : '') + (t.id === state.selectedId ? 'selected' : '');
+      li.innerHTML = `<input type="checkbox" ${t.done ? 'checked' : ''} aria-label="完成">
+        <span class="name"></span>
+        <span class="count">${t.pomodoros ? '🍅×' + t.pomodoros : ''}</span>
+        <button class="del" aria-label="删除">×</button>`;
+      li.querySelector('.name').textContent = t.name;  // 防止 HTML 注入
+      li.addEventListener('click', (e) => {
+        if (e.target.matches('input')) { t.done = e.target.checked; }
+        else if (e.target.matches('.del')) {
+          state.tasks = state.tasks.filter(x => x !== t);
+          if (state.selectedId === t.id) state.selectedId = null;
+        } else { state.selectedId = state.selectedId === t.id ? null : t.id; }
+        save(); renderTasks(); renderTimer();
+      });
+      list.appendChild(li);
+    }
+    const done = state.tasks.filter(t => t.done).length;
+    $('taskSummary').textContent = state.tasks.length ? `已完成 ${done} / ${state.tasks.length}` : '';
+  }
+
+  $('taskForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('taskInput');
+    const name = input.value.trim();
+    if (!name) return;
+    const task = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, done: false, pomodoros: 0 };
+    state.tasks.push(task);
+    if (!state.selectedId) state.selectedId = task.id;
+    input.value = '';
+    save(); renderTasks(); renderTimer();
+  });
+
+  $('clearDone').addEventListener('click', () => {
+    state.tasks = state.tasks.filter(t => !t.done);
+    if (!selectedTask()) state.selectedId = null;
+    save(); renderTasks(); renderTimer();
+  });
+
+  // ---------- 事件 ----------
+  startBtn.addEventListener('click', toggle);
+  $('resetBtn').addEventListener('click', () => setMode(state.mode));
+  $('skipBtn').addEventListener('click', () => finish(true));
+  document.querySelectorAll('.modes button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest?.('input, textarea')) return;
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    else if (e.key === 'r' || e.key === 'R') setMode(state.mode);
+    else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); $('taskInput').focus(); }
+  });
+
+  renderTimer(); renderTasks(); renderStats();
+})();
+</script>
+</body>
+</html>
